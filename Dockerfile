@@ -1,15 +1,12 @@
-# Use uma imagem base oficial do OpenJDK 17
-FROM openjdk:17-jdk-slim
-
-# Defina o diretório de trabalho dentro do container
+# Etapa 1: compila o projeto
+FROM maven:3.9.4-eclipse-temurin-17 AS build
 WORKDIR /app
+COPY . .
+RUN mvn clean package -DskipTests
 
-# Copie o arquivo JAR compilado da aplicação para o diretório de trabalho
-# O nome do JAR é baseado no artifactId e version do pom.xml
-COPY target/associaGEST-0.0.1-SNAPSHOT.jar app.jar
-
-# Exponha a porta que a aplicação Spring Boot usa (padrão 8080)
+# Etapa 2: roda a aplicação
+FROM eclipse-temurin:17-jdk-alpine
+WORKDIR /app
+COPY --from=build /app/target/*.jar app.jar
 EXPOSE 8080
-
-# Defina o comando padrão para executar a aplicação quando o container iniciar
-ENTRYPOINT ["java", "-jar", "app.jar"]
+ENTRYPOINT ["java", "-Dspring.profiles.active=prod", "-jar", "app.jar"]
