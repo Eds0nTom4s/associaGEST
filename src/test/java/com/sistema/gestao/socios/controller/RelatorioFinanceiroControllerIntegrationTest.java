@@ -1,20 +1,25 @@
 package com.sistema.gestao.socios.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sistema.gestao.socios.dto.AuthenticationResponseDTO;
+import com.sistema.gestao.socios.dto.LoginRequestDTO;
 import com.sistema.gestao.socios.dto.RelatorioFinanceiroRequestDTO;
 import com.sistema.gestao.socios.model.RelatorioFinanceiro;
-import com.sistema.gestao.socios.repository.CategoriaRepository; // Import adicionado
-import com.sistema.gestao.socios.repository.PagamentoRepository; // Import adicionado
-import com.sistema.gestao.socios.repository.RelatorioFinanceiroRepository;
-import com.sistema.gestao.socios.repository.SocioRepository; // Import adicionado
+import com.sistema.gestao.socios.model.Role; // Import Role
+import com.sistema.gestao.socios.model.Usuario; // Import Usuario
+import com.sistema.gestao.socios.repository.*; // Import all repositories including UsuarioRepository
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInstance; // Import TestInstance
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.HttpHeaders; // Import HttpHeaders
 import org.springframework.http.MediaType;
-// import org.springframework.test.annotation.DirtiesContext; // Removido
+import org.springframework.security.crypto.password.PasswordEncoder; // Import PasswordEncoder
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult; // Import MvcResult
 import org.springframework.test.web.servlet.ResultActions;
 
 import java.text.SimpleDateFormat;
@@ -30,10 +35,14 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@TestInstance(TestInstance.Lifecycle.PER_CLASS) // Use PER_CLASS for @BeforeAll
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK) // Changed to MOCK environment
 @AutoConfigureMockMvc
-// @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD) // Removido
 class RelatorioFinanceiroControllerIntegrationTest {
+
+    private static final String ADMIN_EMAIL = "admin.relatorio@test.com";
+    private static final String ADMIN_PASSWORD = "password";
+    private String adminToken; // Store the token
 
     @Autowired
     private MockMvc mockMvc;
@@ -52,6 +61,12 @@ class RelatorioFinanceiroControllerIntegrationTest {
     private CategoriaRepository categoriaRepository;
 
     @Autowired
+    private UsuarioRepository usuarioRepository; // Inject UsuarioRepository
+
+    @Autowired
+    private PasswordEncoder passwordEncoder; // Inject PasswordEncoder
+
+    @Autowired
     private ObjectMapper objectMapper;
 
     private RelatorioFinanceiro relatorio1;
@@ -59,15 +74,41 @@ class RelatorioFinanceiroControllerIntegrationTest {
     private RelatorioFinanceiroRequestDTO relatorioRequestDTO;
     private SimpleDateFormat dateFormat;
 
-    @BeforeEach
-    void setup() {
-        // Limpeza explícita do banco de dados antes de cada teste
-        relatorioRepository.deleteAll();
-        pagamentoRepository.deleteAll(); // Adicionado
-        socioRepository.deleteAll();     // Adicionado
-        categoriaRepository.deleteAll(); // Adicionado
+    @BeforeAll
+    void setupAuthentication() throws Exception {
+        // Clean user repo before creating the admin user
+        usuarioRepository.deleteAll();
 
-        // Criação de dados de teste
+        // Create Admin User for authentication
+        Usuario adminUser = Usuario.builder()
+                .email(ADMIN_EMAIL)
+                .senha(passwordEncoder.encode(ADMIN_PASSWORD))
+                .role(Role.ADMIN)
+                .build();
+        usuarioRepository.save(adminUser);
+
+        // Perform login request to get the token
+        LoginRequestDTO loginRequest = new LoginRequestDTO(ADMIN_EMAIL, ADMIN_PASSWORD);
+        MvcResult result = mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(loginRequest)))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        String responseBody = result.getResponse().getContentAsString();
+        AuthenticationResponseDTO authResponse = objectMapper.readValue(responseBody, AuthenticationResponseDTO.class);
+        adminToken = authResponse.getToken(); // Store the token
+    }
+
+    @BeforeEach
+    void setupTestData() {
+        // Clean data repositories before each test
+        relatorioRepository.deleteAll();
+        pagamentoRepository.deleteAll();
+        socioRepository.deleteAll();
+        categoriaRepository.deleteAll();
+
+        // Test data creation
         dateFormat = new SimpleDateFormat("yyyy-MM-dd");
         dateFormat.setTimeZone(TimeZone.getTimeZone("UTC"));
 
@@ -85,10 +126,16 @@ class RelatorioFinanceiroControllerIntegrationTest {
         relatorioRequestDTO.setPeriodoFim(fim2);
     }
 
+    // --- Helper method to add Authorization header ---
+    private String getAuthHeader() {
+        return "Bearer " + adminToken;
+    }
+
     @Test
     void testGerarRelatorio_Success() throws Exception {
         // when
         ResultActions response = mockMvc.perform(post("/api/relatorios")
+                .header(HttpHeaders.AUTHORIZATION, getAuthHeader()) // Add Auth header
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(relatorioRequestDTO)));
 
@@ -105,10 +152,16 @@ class RelatorioFinanceiroControllerIntegrationTest {
     @Test
     void testGerarRelatorio_BadRequest_InvalidDates() throws Exception {
         // given
-        relatorioRequestDTO.setPeriodoFim(new Date(relatorioRequestDTO.getPeriodoInicio().getTime() - 1000)); // End before start
+        // Use clearly distinct dates in the wrong order by setting Date objects
+        // that will serialize to different "yyyy-MM-dd" strings
+        Date inicioDate = dateFormat.parse("2025-04-07");
+        Date fimDate = dateFormat.parse("2025-04-06"); // End date is before start date
+        relatorioRequestDTO.setPeriodoInicio(inicioDate);
+        relatorioRequestDTO.setPeriodoFim(fimDate);
 
         // when
         ResultActions response = mockMvc.perform(post("/api/relatorios")
+                .header(HttpHeaders.AUTHORIZATION, getAuthHeader()) // Add Auth header
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(relatorioRequestDTO)));
 
@@ -125,6 +178,7 @@ class RelatorioFinanceiroControllerIntegrationTest {
 
         // when
         ResultActions response = mockMvc.perform(post("/api/relatorios")
+                .header(HttpHeaders.AUTHORIZATION, getAuthHeader()) // Add Auth header
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(relatorioRequestDTO)));
 
@@ -145,7 +199,8 @@ class RelatorioFinanceiroControllerIntegrationTest {
         relatorioRepository.saveAll(relatorios);
 
         // when
-        ResultActions response = mockMvc.perform(get("/api/relatorios"));
+        ResultActions response = mockMvc.perform(get("/api/relatorios")
+                .header(HttpHeaders.AUTHORIZATION, getAuthHeader())); // Add Auth header
 
         // then
         response.andExpect(status().isOk())
@@ -161,7 +216,8 @@ class RelatorioFinanceiroControllerIntegrationTest {
         RelatorioFinanceiro savedRelatorio = relatorioRepository.save(relatorio1);
 
         // when
-        ResultActions response = mockMvc.perform(get("/api/relatorios/{id}", savedRelatorio.getId()));
+        ResultActions response = mockMvc.perform(get("/api/relatorios/{id}", savedRelatorio.getId())
+                .header(HttpHeaders.AUTHORIZATION, getAuthHeader())); // Add Auth header
 
         // then
         response.andExpect(status().isOk())
@@ -176,7 +232,8 @@ class RelatorioFinanceiroControllerIntegrationTest {
         long nonExistentId = 999L;
 
         // when
-        ResultActions response = mockMvc.perform(get("/api/relatorios/{id}", nonExistentId));
+        ResultActions response = mockMvc.perform(get("/api/relatorios/{id}", nonExistentId)
+                .header(HttpHeaders.AUTHORIZATION, getAuthHeader())); // Add Auth header
 
         // then
         response.andExpect(status().isNotFound())
@@ -192,7 +249,8 @@ class RelatorioFinanceiroControllerIntegrationTest {
         RelatorioFinanceiro savedRelatorio = relatorioRepository.save(relatorio1);
 
         // when
-        ResultActions response = mockMvc.perform(delete("/api/relatorios/{id}", savedRelatorio.getId()));
+        ResultActions response = mockMvc.perform(delete("/api/relatorios/{id}", savedRelatorio.getId())
+                .header(HttpHeaders.AUTHORIZATION, getAuthHeader())); // Add Auth header
 
         // then
         response.andExpect(status().isNoContent())
@@ -208,7 +266,8 @@ class RelatorioFinanceiroControllerIntegrationTest {
         long nonExistentId = 999L;
 
         // when
-        ResultActions response = mockMvc.perform(delete("/api/relatorios/{id}", nonExistentId));
+        ResultActions response = mockMvc.perform(delete("/api/relatorios/{id}", nonExistentId)
+                .header(HttpHeaders.AUTHORIZATION, getAuthHeader())); // Add Auth header
 
         // then
         response.andExpect(status().isNotFound())

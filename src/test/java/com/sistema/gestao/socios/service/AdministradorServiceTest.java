@@ -134,15 +134,26 @@ class AdministradorServiceTest {
 
         when(administradorRepository.findById(anyLong())).thenReturn(Optional.of(administrador));
         // No need to mock findByEmail as it's not changing
+
+        // Configure the mock mapper to actually update the object
+        doAnswer(invocation -> {
+            AdministradorRequestDTO dtoArg = invocation.getArgument(0);
+            Administrador adminArg = invocation.getArgument(1);
+            adminArg.setNome(dtoArg.getNome()); // Simulate the name update
+            // Simulate other field updates if the mapper did more
+            return null; // Void method returns null
+        }).when(administradorMapper).updateAdministradorFromDto(any(AdministradorRequestDTO.class), any(Administrador.class));
+
+        // Mock save to return the (now modified) object passed to it
         when(administradorRepository.save(any(Administrador.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         Administrador result = administradorService.atualizar(1L, updateDto);
 
         assertNotNull(result);
-        assertEquals("Admin User Updated", result.getNome());
+        assertEquals("Admin User Updated", result.getNome()); // Assertion should now pass
         verify(administradorRepository, times(1)).findById(1L);
-        verify(administradorMapper, times(1)).updateAdministradorFromDto(updateDto, administrador);
-        verify(administradorRepository, times(1)).save(administrador);
+        verify(administradorMapper, times(1)).updateAdministradorFromDto(updateDto, administrador); // Verify the mapper was called
+        verify(administradorRepository, times(1)).save(administrador); // Verify save was called with the modified object
     }
 
      @Test

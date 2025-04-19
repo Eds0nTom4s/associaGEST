@@ -35,6 +35,7 @@ public class GlobalExceptionHandler {
     // Handler for Business Rule Violations
     @ExceptionHandler(RegraNegocioException.class)
     public ResponseEntity<ErrorResponse> handleRegraNegocio(RegraNegocioException ex, HttpServletRequest request) {
+        log.warn("!!!! ENTERING handleRegraNegocio !!!!"); // Add log
         ErrorResponse error = new ErrorResponse(
                 LocalDateTime.now(),
                 HttpStatus.BAD_REQUEST.value(),
@@ -48,6 +49,7 @@ public class GlobalExceptionHandler {
     // Handler for Validation Errors (@Valid)
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<List<ValidationError>> handleValidationExceptions(MethodArgumentNotValidException ex) {
+        log.warn("!!!! ENTERING handleValidationExceptions !!!!"); // Add log
         List<ValidationError> errors = ex.getBindingResult().getFieldErrors().stream()
                 .map(error -> new ValidationError(error.getField(), error.getDefaultMessage()))
                 .collect(Collectors.toList());

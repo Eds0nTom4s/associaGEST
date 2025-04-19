@@ -118,19 +118,30 @@ class CategoriaServiceTest {
 
         when(categoriaRepository.findById(anyLong())).thenReturn(Optional.of(categoria));
         when(categoriaRepository.findByNomeIgnoreCase(eq("Premium Plus"))).thenReturn(Optional.empty()); // New name doesn't exist
-        when(categoriaRepository.save(any(Categoria.class))).thenAnswer(invocation -> invocation.getArgument(0)); // Return saved entity
+
+        // Configure the mock mapper to actually update the object
+        doAnswer(invocation -> {
+            CategoriaRequestDTO dtoArg = invocation.getArgument(0);
+            Categoria catArg = invocation.getArgument(1);
+            catArg.setNome(dtoArg.getNome()); // Simulate update
+            catArg.setBeneficios(dtoArg.getBeneficios());
+            catArg.setValorMensalidade(dtoArg.getValorMensalidade());
+            return null; // Void method returns null
+        }).when(categoriaMapper).updateCategoriaFromDto(any(CategoriaRequestDTO.class), any(Categoria.class));
+
+        when(categoriaRepository.save(any(Categoria.class))).thenAnswer(invocation -> invocation.getArgument(0)); // Return saved entity (now modified)
 
         Categoria result = categoriaService.atualizar(1L, updateDto);
 
         assertNotNull(result);
-        assertEquals("Premium Plus", result.getNome());
+        assertEquals("Premium Plus", result.getNome()); // Assertion should now pass
         assertEquals("Mais benefícios", result.getBeneficios());
         assertEquals(new BigDecimal("120.00"), result.getValorMensalidade());
 
         verify(categoriaRepository, times(1)).findById(1L);
         verify(categoriaRepository, times(1)).findByNomeIgnoreCase("Premium Plus");
-        verify(categoriaMapper, times(1)).updateCategoriaFromDto(updateDto, categoria);
-        verify(categoriaRepository, times(1)).save(categoria);
+        verify(categoriaMapper, times(1)).updateCategoriaFromDto(updateDto, categoria); // Verify mapper was called
+        verify(categoriaRepository, times(1)).save(categoria); // Verify save was called with modified object
     }
 
      @Test

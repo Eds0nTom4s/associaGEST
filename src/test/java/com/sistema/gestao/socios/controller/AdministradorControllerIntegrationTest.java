@@ -1,17 +1,32 @@
 package com.sistema.gestao.socios.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sistema.gestao.socios.dto.AdministradorRequestDTO;
+// LoginRequestDTO and AuthenticationResponseDTO no longer needed for setup
+// import com.sistema.gestao.socios.dto.AuthenticationResponseDTO;
+// import com.sistema.gestao.socios.dto.LoginRequestDTO;
 import com.sistema.gestao.socios.model.Administrador;
+import com.sistema.gestao.socios.model.Role;
+import com.sistema.gestao.socios.model.Usuario;
 import com.sistema.gestao.socios.repository.AdministradorRepository;
+import com.sistema.gestao.socios.repository.UsuarioRepository;
+import com.sistema.gestao.socios.security.JwtService; // Import JwtService
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInstance; // Import TestInstance
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
-// import org.springframework.test.annotation.DirtiesContext; // Removido
+import org.springframework.security.core.userdetails.UserDetails; // Import UserDetails
+import org.springframework.security.core.userdetails.UserDetailsService; // Import UserDetailsService
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
+// MvcResult no longer needed
+// import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.ResultActions;
 
 import java.util.ArrayList;
@@ -23,10 +38,14 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@TestInstance(TestInstance.Lifecycle.PER_CLASS) // Use PER_CLASS for @BeforeAll
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK) // Changed to MOCK environment
 @AutoConfigureMockMvc
-// @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD) // Removido
 class AdministradorControllerIntegrationTest {
+
+    private static final String ADMIN_AUTH_EMAIL = "admin.auth.admin@test.com"; // Use a distinct email for the auth user
+    private static final String ADMIN_AUTH_PASSWORD = "password";
+    private String adminToken;
 
     @Autowired
     private MockMvc mockMvc;
@@ -35,19 +54,49 @@ class AdministradorControllerIntegrationTest {
     private AdministradorRepository administradorRepository;
 
     @Autowired
+    private UsuarioRepository usuarioRepository; // Inject UsuarioRepository
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+
+    @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private JwtService jwtService; // Inject JwtService
+
+    @Autowired
+    private UserDetailsService userDetailsService; // Inject UserDetailsService
 
     private Administrador admin1;
     private Administrador admin2;
     private AdministradorRequestDTO adminRequestDTO;
 
+    @BeforeAll
+    void setupAuthentication() throws Exception {
+        // Clean user repo before creating the admin user
+        usuarioRepository.deleteAll();
+
+        // Create Admin User for authentication
+        Usuario authUser = Usuario.builder()
+                .email(ADMIN_AUTH_EMAIL)
+                .senha(passwordEncoder.encode(ADMIN_AUTH_PASSWORD))
+                .role(Role.ADMIN) // Ensure this user has ADMIN role
+                .build();
+        usuarioRepository.save(authUser);
+
+        // Generate token directly using JwtService
+        UserDetails userDetails = userDetailsService.loadUserByUsername(ADMIN_AUTH_EMAIL);
+        adminToken = jwtService.generateToken(userDetails);
+    }
+
     @BeforeEach
-    void setup() {
-        // Limpeza explícita do banco de dados antes de cada teste
+    void setupTestData() {
+        // Clean only administrador repository before each test
         administradorRepository.deleteAll();
 
-        // Criação de dados de teste
-        admin1 = new Administrador(null, "Admin One", "admin1@example.com", "pass1");
+        // Test data creation
+        admin1 = new Administrador(null, "Admin One", "admin1@example.com", "pass1"); // Note: Password here is raw, service should hash it
         admin2 = new Administrador(null, "Admin Two", "admin2@example.com", "pass2");
 
         adminRequestDTO = new AdministradorRequestDTO();
@@ -56,10 +105,16 @@ class AdministradorControllerIntegrationTest {
         adminRequestDTO.setSenha("senhaforte123");
     }
 
+    // --- Helper method to add Authorization header ---
+    private String getAuthHeader() {
+        return "Bearer " + adminToken;
+    }
+
     @Test
     void testCadastrarAdministrador_Success() throws Exception {
         // when
         ResultActions response = mockMvc.perform(post("/api/administradores")
+                .header(HttpHeaders.AUTHORIZATION, getAuthHeader()) // Add Auth header
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(adminRequestDTO)));
 
@@ -79,6 +134,7 @@ class AdministradorControllerIntegrationTest {
 
         // when
         ResultActions response = mockMvc.perform(post("/api/administradores")
+                .header(HttpHeaders.AUTHORIZATION, getAuthHeader()) // Add Auth header
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(adminRequestDTO)));
 
@@ -95,6 +151,7 @@ class AdministradorControllerIntegrationTest {
 
         // when
         ResultActions response = mockMvc.perform(post("/api/administradores")
+                .header(HttpHeaders.AUTHORIZATION, getAuthHeader()) // Add Auth header
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(adminRequestDTO)));
 
@@ -114,7 +171,8 @@ class AdministradorControllerIntegrationTest {
         administradorRepository.saveAll(admins);
 
         // when
-        ResultActions response = mockMvc.perform(get("/api/administradores"));
+        ResultActions response = mockMvc.perform(get("/api/administradores")
+                .header(HttpHeaders.AUTHORIZATION, getAuthHeader())); // Add Auth header
 
         // then
         response.andExpect(status().isOk())
@@ -130,7 +188,8 @@ class AdministradorControllerIntegrationTest {
         Administrador savedAdmin = administradorRepository.save(admin1);
 
         // when
-        ResultActions response = mockMvc.perform(get("/api/administradores/{id}", savedAdmin.getId()));
+        ResultActions response = mockMvc.perform(get("/api/administradores/{id}", savedAdmin.getId())
+                .header(HttpHeaders.AUTHORIZATION, getAuthHeader())); // Add Auth header
 
         // then
         response.andExpect(status().isOk())
@@ -145,7 +204,8 @@ class AdministradorControllerIntegrationTest {
         long nonExistentId = 999L;
 
         // when
-        ResultActions response = mockMvc.perform(get("/api/administradores/{id}", nonExistentId));
+        ResultActions response = mockMvc.perform(get("/api/administradores/{id}", nonExistentId)
+                .header(HttpHeaders.AUTHORIZATION, getAuthHeader())); // Add Auth header
 
         // then
         response.andExpect(status().isNotFound())
@@ -161,10 +221,11 @@ class AdministradorControllerIntegrationTest {
         AdministradorRequestDTO updatedDto = new AdministradorRequestDTO();
         updatedDto.setNome("Admin One Updated");
         updatedDto.setEmail(savedAdmin.getEmail()); // Keep email
-        updatedDto.setSenha("ignored"); // Password update should be handled separately
+        updatedDto.setSenha("validpassword"); // Use a valid password (>= 8 chars)
 
         // when
         ResultActions response = mockMvc.perform(put("/api/administradores/{id}", savedAdmin.getId())
+                .header(HttpHeaders.AUTHORIZATION, getAuthHeader()) // Add Auth header
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(updatedDto)));
 
@@ -182,6 +243,7 @@ class AdministradorControllerIntegrationTest {
 
         // when
         ResultActions response = mockMvc.perform(put("/api/administradores/{id}", nonExistentId)
+                .header(HttpHeaders.AUTHORIZATION, getAuthHeader()) // Add Auth header
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(adminRequestDTO)));
 
@@ -200,10 +262,11 @@ class AdministradorControllerIntegrationTest {
         AdministradorRequestDTO updateDto = new AdministradorRequestDTO();
         updateDto.setNome("Admin Two Updated");
         updateDto.setEmail(admin1.getEmail()); // Try to update admin2's email to admin1's email
-        updateDto.setSenha("ignored");
+        updateDto.setSenha("validpassword"); // Use a valid password (>= 8 chars)
 
         // when
         ResultActions response = mockMvc.perform(put("/api/administradores/{id}", savedAdmin2.getId())
+                .header(HttpHeaders.AUTHORIZATION, getAuthHeader()) // Add Auth header
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(updateDto)));
 
@@ -221,7 +284,8 @@ class AdministradorControllerIntegrationTest {
         administradorRepository.save(admin2); // Ensure not deleting the last one if validation exists
 
         // when
-        ResultActions response = mockMvc.perform(delete("/api/administradores/{id}", savedAdmin.getId()));
+        ResultActions response = mockMvc.perform(delete("/api/administradores/{id}", savedAdmin.getId())
+                .header(HttpHeaders.AUTHORIZATION, getAuthHeader())); // Add Auth header
 
         // then
         response.andExpect(status().isNoContent())
@@ -237,7 +301,8 @@ class AdministradorControllerIntegrationTest {
         long nonExistentId = 999L;
 
         // when
-        ResultActions response = mockMvc.perform(delete("/api/administradores/{id}", nonExistentId));
+        ResultActions response = mockMvc.perform(delete("/api/administradores/{id}", nonExistentId)
+                .header(HttpHeaders.AUTHORIZATION, getAuthHeader())); // Add Auth header
 
         // then
         response.andExpect(status().isNotFound())

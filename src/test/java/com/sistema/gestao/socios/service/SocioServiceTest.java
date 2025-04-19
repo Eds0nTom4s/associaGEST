@@ -191,16 +191,27 @@ class SocioServiceTest {
 
         when(socioRepository.findById(anyLong())).thenReturn(Optional.of(socio));
         // No need to mock findByEmail/findByDocumento as they are not changing
-        when(socioRepository.save(any(Socio.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // Configure the mock mapper to actually update the object
+        doAnswer(invocation -> {
+            SocioRequestDTO dtoArg = invocation.getArgument(0);
+            Socio socioArg = invocation.getArgument(1);
+            socioArg.setNome(dtoArg.getNome()); // Simulate update
+            socioArg.setTelefone(dtoArg.getTelefone());
+            // Simulate other field updates if the mapper did more
+            return null; // Void method returns null
+        }).when(socioMapper).updateSocioFromDto(any(SocioRequestDTO.class), any(Socio.class));
+
+        when(socioRepository.save(any(Socio.class))).thenAnswer(invocation -> invocation.getArgument(0)); // Return saved entity (now modified)
 
         Socio result = socioService.atualizar(1L, updateDto);
 
         assertNotNull(result);
-        assertEquals("João Silva Atualizado", result.getNome());
+        assertEquals("João Silva Atualizado", result.getNome()); // Assertion should now pass
         assertEquals("888888888", result.getTelefone());
         verify(socioRepository, times(1)).findById(1L);
-        verify(socioMapper, times(1)).updateSocioFromDto(updateDto, socio);
-        verify(socioRepository, times(1)).save(socio);
+        verify(socioMapper, times(1)).updateSocioFromDto(updateDto, socio); // Verify mapper was called
+        verify(socioRepository, times(1)).save(socio); // Verify save was called with modified object
     }
 
      @Test

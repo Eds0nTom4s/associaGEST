@@ -35,7 +35,7 @@ public class PagamentoService {
     public Pagamento registrarPagamento(PagamentoRequestDTO dto) {
         // Validate Socio and Categoria existence
         Socio socio = socioRepository.findById(dto.getSocioId())
-                .orElseThrow(() -> new RecursoNaoEncontradoException("Sócio não encontrado com id: " + dto.getSocioId()));
+                .orElseThrow(() -> new RecursoNaoEncontradoException("Sócio não encontrado com id: " + dto.getSocioId())); // Standardizing to lowercase 'id'
         Categoria categoria = categoriaService.buscarPorId(dto.getCategoriaId()); // Throws if not found
 
         // Example validation: Only allow payment for socios with specific status
@@ -65,14 +65,14 @@ public class PagamentoService {
     @Transactional(readOnly = true)
     public Pagamento buscarPorId(Long id) {
         return pagamentoRepository.findById(id)
-                .orElseThrow(() -> new RecursoNaoEncontradoException("Pagamento não encontrado com id: " + id));
+                .orElseThrow(() -> new RecursoNaoEncontradoException("Pagamento não encontrado com id: " + id)); // Already lowercase 'id'
     }
 
     @Transactional(readOnly = true)
     public List<Pagamento> buscarPorSocioId(Long socioId) {
         // Optional: Check if socio exists first
         socioRepository.findById(socioId)
-                .orElseThrow(() -> new RecursoNaoEncontradoException("Sócio não encontrado com id: " + socioId));
+                .orElseThrow(() -> new RecursoNaoEncontradoException("Sócio não encontrado com id: " + socioId)); // Already lowercase 'id'
         return pagamentoRepository.findBySocioId(socioId);
     }
 

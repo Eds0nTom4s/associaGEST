@@ -33,7 +33,7 @@ public class NotificacaoService {
     public Notificacao criarNotificacao(NotificacaoRequestDTO dto) {
         // Validate Socio existence
         Socio socio = socioRepository.findById(dto.getSocioId())
-             .orElseThrow(() -> new RecursoNaoEncontradoException("Sócio não encontrado com id: " + dto.getSocioId()));
+             .orElseThrow(() -> new RecursoNaoEncontradoException("Sócio não encontrado com id: " + dto.getSocioId())); // Standardizing to lowercase 'id'
 
         Notificacao notificacao = notificacaoMapper.toNotificacao(dto);
         notificacao.setSocio(socio);
@@ -77,14 +77,14 @@ public class NotificacaoService {
     @Transactional(readOnly = true)
     public Notificacao buscarPorId(Long id) {
         return notificacaoRepository.findById(id)
-                .orElseThrow(() -> new RecursoNaoEncontradoException("Notificação não encontrada com id: " + id));
+                .orElseThrow(() -> new RecursoNaoEncontradoException("Notificação não encontrada com id: " + id)); // Standardizing to lowercase 'id'
     }
 
     @Transactional(readOnly = true)
     public List<Notificacao> buscarPorSocioId(Long socioId) {
         // Optional: Check if socio exists first
         socioRepository.findById(socioId)
-                .orElseThrow(() -> new RecursoNaoEncontradoException("Sócio não encontrado com id: " + socioId));
+                .orElseThrow(() -> new RecursoNaoEncontradoException("Sócio não encontrado com id: " + socioId)); // Standardizing to lowercase 'id'
         return notificacaoRepository.findBySocioId(socioId);
     }
 

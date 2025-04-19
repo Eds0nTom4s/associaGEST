@@ -1,0 +1,42 @@
+services:
+  # Serviço do Backend Spring Boot
+  backend:
+    build: . # Constrói a imagem a partir do Dockerfile no diretório atual
+    container_name: associagest-backend
+    ports:
+      - "8080:8080" # Mapeia a porta 8080 do container para a porta 8080 do host
+    environment:
+      # Sobrescreve as propriedades do application.properties para conectar ao container do DB
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://db:5432/associagest
+      - SPRING_DATASOURCE_USERNAME=user
+      - SPRING_DATASOURCE_PASSWORD=password
+      # Garante que o backend espere o banco de dados estar pronto (opcional, mas bom ter)
+      # - SPRING_JPA_HIBERNATE_DDL_AUTO=update # Já está no application.properties, mas pode ser definido aqui se necessário
+    depends_on:
+      - db # Garante que o serviço 'db' inicie antes do 'backend'
+    networks:
+      - associagest-net # Conecta o backend à rede definida
+
+  # Serviço do Banco de Dados PostgreSQL
+  db:
+    image: postgres:15 # Usa a imagem oficial do PostgreSQL versão 15
+    container_name: associagest-db
+    ports:
+      - "5433:5432" # Mapeia a porta 5432 do container para a 5433 do host
+    environment:
+      POSTGRES_DB: associagest # Nome do banco de dados a ser criado
+      POSTGRES_USER: user      # Usuário do banco de dados
+      POSTGRES_PASSWORD: password # Senha do banco de dados
+    volumes:
+      - postgres_data:/var/lib/postgresql/data # Volume nomeado para persistir os dados do PostgreSQL
+    networks:
+      - associagest-net # Conecta o banco de dados à rede definida
+
+# Define volumes nomeados
+volumes:
+  postgres_data:
+
+# Define a rede customizada
+networks:
+  associagest-net:
+    driver: bridge # Usa o driver de rede padrão 'bridge'

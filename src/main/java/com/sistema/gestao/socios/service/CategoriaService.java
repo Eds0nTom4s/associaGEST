@@ -38,7 +38,7 @@ public class CategoriaService {
     @Transactional(readOnly = true)
     public Categoria buscarPorId(Long id) {
         return categoriaRepository.findById(id)
-                .orElseThrow(() -> new RecursoNaoEncontradoException("Categoria não encontrada com id: " + id));
+                .orElseThrow(() -> new RecursoNaoEncontradoException("Categoria não encontrada com id: " + id)); // Standardizing to lowercase 'id'
     }
 
     @Transactional

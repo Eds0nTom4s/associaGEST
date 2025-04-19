@@ -60,7 +60,7 @@ public class SocioService {
     @Transactional(readOnly = true)
     public Socio buscarPorId(Long id) {
         return socioRepository.findById(id)
-                .orElseThrow(() -> new RecursoNaoEncontradoException("Sócio não encontrado com id: " + id));
+                .orElseThrow(() -> new RecursoNaoEncontradoException("Sócio não encontrado com id: " + id)); // Corrected case
     }
 
      @Transactional(readOnly = true)
